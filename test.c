@@ -93,8 +93,13 @@ void initialize(void){
 	//Initialize the state!
 	state = gsl_vector_complex_alloc(resolution);
 	for(i = 0; i < resolution; i++){
-		len = 1.0/(1 + fabs((double) i/resolution - 0.5));
-		gsl_vector_complex_set(state, i, len*len*len*len*len*len*len*len*len*len*gsl_complex_exp(-2*M_PI*I*i*5/resolution));
+		//len = 1.0/(1 + fabs((double) i/resolution - 0.5));
+		//gsl_vector_complex_set(state, i, len*len*len*len*len*len*len*len*len*len*gsl_complex_exp(-2*M_PI*I*i*5/resolution));
+		if(i == (resolution - 1)/2){
+			gsl_vector_complex_set(state, i, 1.0);
+		} else {
+			gsl_vector_complex_set(state, i, 0.0);
+		}
 	}
 	
 	//Normalize the state
@@ -198,20 +203,24 @@ int main(int argc, char **argv){
 	int text_x_pos;
 	int text_y_pos;
 	double time;
-	double time_scale = 0.03;
+	double time_scale = 0.01;
 
-	resolution = 301;
+	resolution = 101;
 	mass = 1.0;
 	time = 0.0;
 
-	InitWindow(480, 600, "Particle in Ring");
+	SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
+	InitWindow(0, 0, "Particle in Ring");
+
 	if(!IsWindowReady()){
 		fprintf(stderr, "Error: failed to open window\n");
 		return 1;
 	}
-	if(!IsWindowFullscreen()){
-		ToggleFullscreen();
+	if(!IsWindowMaximized()){
+		MaximizeWindow();
 	}
+
+	SetWindowState(FLAG_WINDOW_RESIZABLE);
 
 	BeginDrawing();
 	ClearBackground(BLACK);
@@ -233,12 +242,14 @@ int main(int argc, char **argv){
 	initialize();
 
 	while(!WindowShouldClose()){
+		screen_width = GetRenderWidth();
+		screen_height = GetRenderHeight();
 		compute_state(time);
 		BeginDrawing();
 		ClearBackground(WHITE);
 		render_state(screen_width/5, screen_height/5, 3*screen_width/5, 3*screen_height/5);
 		EndDrawing();
-		time += 1.0/60.0*time_scale;
+		time += GetFrameTime()*time_scale;
 	}
 
 	return 0;
