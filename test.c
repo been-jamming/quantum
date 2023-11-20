@@ -4,6 +4,7 @@
 #include <complex.h>
 
 #define HAVE_INLINE
+#define EPSILON 0.000001
 
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_complex_math.h>
@@ -151,6 +152,11 @@ void initialize(void){
 	//Normalize the state
 	gsl_blas_zdotc(state, state, &length);
 	gsl_vector_complex_scale(state, 1.0/csqrt(length));
+
+	//Normalize the state
+	gsl_blas_zdotc(state, state, &length);
+	gsl_vector_complex_scale(state, 1.0/csqrt(length));
+
 	//Preprocess the state
 	recompute_state();
 }
@@ -218,6 +224,7 @@ double render_state_momentum(double largest_abs2, int pos_x, int pos_y, int widt
 	gsl_blas_zgemv(CblasNoTrans, 1.0, FT, state, 0.0, state_momentum);
 
 	if(largest_abs2 < 0.0 || !(ui_mode&PAUSED)){
+		largest_abs2 = 0.0;
 		for(i = 0; i < resolution; i++){
 			entry = gsl_vector_complex_get(state_momentum, i);
 			abs2 = gsl_complex_abs2(entry);
@@ -263,6 +270,7 @@ double render_state_position(double largest_abs2, int pos_x, int pos_y, int widt
 	Color rect_color;
 
 	if(largest_abs2 < 0.0 || !(ui_mode&PAUSED)){
+		largest_abs2 = 0.0;
 		for(i = 0; i < resolution; i++){
 			entry = gsl_vector_complex_get(state, i);
 			abs2 = gsl_complex_abs2(entry);
@@ -310,12 +318,12 @@ double edit_position(double max_val, int pos_x, int pos_y, int width, int height
 	complex double entry;
 	int index;
 	double value;
+	complex double length;
 
 	delta = GetMouseDelta();
 	mouse_x = GetMouseX();
 	mouse_y = GetMouseY();
-	if(IsMouseButtonDown(MOUSE_BUTTON_LEFT) && (delta.x != 0 || delta.y != 0) && mouse_x >= pos_x && mouse_y >= pos_y && mouse_x < pos_x + width && mouse_y < pos_y + height){
-		snprintf(message, 64, "Editing position");
+	if((ui_mode&PAUSED) && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && (delta.x != 0 || delta.y != 0) && mouse_x >= pos_x && mouse_y >= pos_y && mouse_x < pos_x + width && mouse_y < pos_y + height){
 		index = (mouse_x - pos_x)*resolution/width;
 		if(index < 0){
 			index = 0;
@@ -326,7 +334,9 @@ double edit_position(double max_val, int pos_x, int pos_y, int width, int height
 		value = 1.0 - (double) (mouse_y - pos_y)/height;
 		entry = gsl_vector_complex_get(state, index);
 		entry = entry*sqrt(value*max_val)/cabs(entry);
+		snprintf(message, 64, "Editing position %d to norm %.2f", index, sqrt(value*max_val));
 		gsl_vector_complex_set(state, index, entry);
+
 		recompute_state();
 	}
 }
@@ -337,24 +347,29 @@ double edit_momentum(double max_val, int pos_x, int pos_y, int width, int height
 	Vector2 delta;
 	complex double entry;
 	int index;
+	int display_index;
 	double value;
+	complex double length;
 
 	delta = GetMouseDelta();
 	mouse_x = GetMouseX();
 	mouse_y = GetMouseY();
-	if(IsMouseButtonDown(MOUSE_BUTTON_LEFT) && (delta.x != 0 || delta.y != 0) && mouse_x >= pos_x && mouse_y >= pos_y && mouse_x < pos_x + width && mouse_y < pos_y + height){
-		snprintf(message, 64, "Editing momentum");
+	if((ui_mode&PAUSED) && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && (delta.x != 0 || delta.y != 0) && mouse_x >= pos_x && mouse_y >= pos_y && mouse_x < pos_x + width && mouse_y < pos_y + height){
 		index = (mouse_x - pos_x)*resolution/width;
 		if(index < (resolution - 1)/2){
+			display_index = index - (resolution - 1)/2;
 			index += (resolution + 1)/2;
 		} else {
 			index -= (resolution - 1)/2;
+			display_index = index;
 		}
 		value = 1.0 - (double) (mouse_y - pos_y)/height;
 		entry = gsl_vector_complex_get(state_momentum, index);
 		entry = entry*sqrt(value*max_val)/cabs(entry);
+		snprintf(message, 64, "Editing momentum %d to norm %.2f", display_index, sqrt(value*max_val));
 		gsl_vector_complex_set(state_momentum, index, entry);
 		gsl_blas_zgemv(CblasNoTrans, 1.0, IFT, state_momentum, 0.0, state);
+
 		recompute_state();
 	}
 }
@@ -370,19 +385,20 @@ void edit_potential(double max_potential, int pos_x, int pos_y, int width, int h
 	delta = GetMouseDelta();
 	mouse_x = GetMouseX();
 	mouse_y = GetMouseY();
-	if(IsMouseButtonDown(MOUSE_BUTTON_LEFT) && (delta.x != 0 || delta.y != 0) && mouse_x >= pos_x && mouse_y >= pos_y && mouse_x < pos_x + width && mouse_y < pos_y + height){
-		snprintf(message, 64, "Editing potential");
+	if((ui_mode&PAUSED) && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && (delta.x != 0 || delta.y != 0) && mouse_x >= pos_x && mouse_y >= pos_y && mouse_x < pos_x + width && mouse_y < pos_y + height){
 		potential_edited = 1;
 		index = (mouse_x - pos_x)*resolution/width;
 		value = 1.0 - (double) (mouse_y - pos_y)/height;
 		entry = gsl_matrix_complex_get(V, index, index);
 		entry = value*max_potential;
+		snprintf(message, 64, "Editing potential %d to %.2f", index, value*max_potential);
 		gsl_matrix_complex_set(V, index, index, entry);
 	}
 }
 
-void handle_input(void){
+void handle_input(double *pos_max_val, double *mom_max_val){
 	int key;
+	int i;
 	complex double length;
 
 	while((key = GetKeyPressed())){
@@ -393,15 +409,16 @@ void handle_input(void){
 					snprintf(message, 64, "Paused");
 				} else {
 					snprintf(message, 64, "Unpaused");
+					//Normalize the state
+					gsl_blas_zdotc(state, state, &length);
+					gsl_vector_complex_scale(state, 1.0/csqrt(length));
 					if(potential_edited){
 						recompute_hamiltonian();
 						potential_edited = 0;
+					} else {
+						recompute_state();
 					}
 				}
-				//Normalize the state
-				gsl_blas_zdotc(state, state, &length);
-				gsl_vector_complex_scale(state, 1.0/csqrt(length));
-				recompute_state();
 				break;
 			case KEY_P:
 				ui_mode &= ~0x07;
@@ -433,6 +450,24 @@ void handle_input(void){
 			case KEY_PERIOD:
 				time_scale *= 2;
 				snprintf(message, 64, "Speed: %g", time_scale);
+				break;
+			case KEY_Z:
+				if(((ui_mode&POSITION) || (ui_mode&MOMENTUM))&&(ui_mode&PAUSED)){
+					snprintf(message, 64, "Set state to 0");
+					for(i = 0; i < resolution; i++){
+						gsl_vector_complex_set(state, i, EPSILON);
+					}
+					recompute_state();
+
+					*pos_max_val = 1.0;
+					*mom_max_val = 1.0;
+				} else if(ui_mode&POTENTIAL){
+					snprintf(message, 64, "Set potential to 0");
+					for(i = 0; i < resolution; i++){
+						gsl_matrix_complex_set(V, i, i, 0);
+					}
+					recompute_hamiltonian();
+				}
 				break;
 		}
 	}
@@ -508,7 +543,6 @@ int main(int argc, char **argv){
 			pos_max_val = render_state_position(pos_max_val, screen_width/5, screen_height/5, 3*screen_width/5, 3*screen_height/5);
 			edit_position(pos_max_val, screen_width/5, screen_height/5, 3*screen_width/5, 3*screen_height/5);
 		} else if(ui_mode&MOMENTUM){
-			render_potential(max_potential, screen_width/5, screen_height/5, 3*screen_width/5, 3*screen_height/5);
 			mom_max_val = render_state_momentum(mom_max_val, screen_width/5, screen_height/5, 3*screen_width/5, 3*screen_height/5);
 			edit_momentum(mom_max_val, screen_width/5, screen_height/5, 3*screen_width/5, 3*screen_height/5);
 		} else if(ui_mode&POTENTIAL){
@@ -519,7 +553,7 @@ int main(int argc, char **argv){
 			}
 		}
 		EndDrawing();
-		handle_input();
+		handle_input(&pos_max_val, &mom_max_val);
 		if(!(ui_mode&PAUSED)){
 			time += GetFrameTime()*time_scale;
 		}
