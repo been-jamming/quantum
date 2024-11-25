@@ -6,6 +6,10 @@
 #include <complex.h>
 #include <raylib.h>
 
+#ifndef M_PI
+	#define M_PI (3.1415926535898)
+#endif
+
 #define resolution_x 121
 #define resolution_y 62
 #define pixel_size 14
@@ -17,7 +21,7 @@
 #define max_speed 1.4
 #define max_round_time 60.0
 #define localization 25.0
-#define background_color ((Color) {.r = 64, .g = 64, .b = 64, .a = 255})
+#define background_color ((Color) {.r = 128, .g = 128, .b = 128, .a = 255})
 
 int screen_resolution_x = resolution_x*pixel_size;
 int screen_resolution_y = resolution_y*pixel_size;
@@ -47,15 +51,15 @@ double round_start_time = 0.0;
 double critical_mass_time = -1.0;
 double current_time;
 
-void initialize_state(double x_dir, double y_dir, double localize){
+void initialize_state(double x_dir, double y_dir, double localize_x, double localize_y){
 	complex entry, entry_x, entry_y;
 	int x;
 	int y;
 
 	for(x = 0; x < resolution_x; x++){
 		for(y = 0; y < resolution_y; y++){
-			entry_x = cexp(-(x - resolution_x/2.0)*(x - resolution_x/2.0)/localize + x*x_dir*2.0*M_PI*I);
-			entry_y = cexp(-(y - resolution_y/2.0)*(y - resolution_y/2.0)/localize + y*y_dir*2.0*M_PI*I);
+			entry_x = cexp(-(x - resolution_x/2.0)*(x - resolution_x/2.0)/(localize_x) + x*x_dir*2.0*M_PI*I);
+			entry_y = cexp(-(y - resolution_y/2.0)*(y - resolution_y/2.0)/(localize_y) + y*y_dir*2.0*M_PI*I);
 			entry = entry_x*entry_y;
 			state_real[x][y] = creal(entry);
 			state_imag[x][y] = cimag(entry);
@@ -63,9 +67,29 @@ void initialize_state(double x_dir, double y_dir, double localize){
 	}
 }
 
+void normalize(double (*next_state_real)[resolution_y], double (*next_state_imag)[resolution_y], double (*state_imag)[resolution_y]){
+	int x, y;
+	double total = 0.0, norm;
+
+	for(x = 0; x < resolution_x; x++){
+		for(y = 0; y < resolution_y; y++){
+			total += next_state_real[x][y]*next_state_real[x][y] + next_state_imag[x][y]*state_imag[x][y];
+		}
+	}
+
+	norm = sqrt(total);
+
+	for(x = 0; x < resolution_x; x++){
+		for(y = 0; y < resolution_y; y++){
+			next_state_real[x][y] /= norm;
+			next_state_imag[x][y] /= norm;
+		}
+	}
+}
+
 void start_new_round(void){
 	int r;
-	double speed, angle, x_dir, y_dir, localize;
+	double speed, angle, x_dir, y_dir, localize_x, localize_y;
 
 	p0_previous_score += p0_round_score;
 	p1_previous_score += p1_round_score;
@@ -81,9 +105,12 @@ void start_new_round(void){
 	y_dir = sin(angle);
 
 	r = GetRandomValue(50, 200);
-	localize = localization*r/100.0;
+	localize_x = localization*r/100.0;
+	r = GetRandomValue(50, 200);
+	localize_y = localization*r/100.0;
 
-	initialize_state(x_dir*speed, y_dir*speed, localize);
+	initialize_state(x_dir*speed, y_dir*speed, localize_x, localize_y);
+	normalize(state_real, state_imag, state_imag);
 
 	round_start_time = current_time;
 	critical_mass_time = -1.0;
@@ -293,26 +320,6 @@ void get_second_derivative(double *out_x, double *out_y, double (*vector)[resolu
 	*out_y = y0 - 2.0*y1 + y2;
 }
 
-void normalize(double (*next_state_real)[resolution_y], double (*next_state_imag)[resolution_y], double (*state_imag)[resolution_y]){
-	int x, y;
-	double total = 0.0, norm;
-
-	for(x = 0; x < resolution_x; x++){
-		for(y = 0; y < resolution_y; y++){
-			total += next_state_real[x][y]*next_state_real[x][y] + next_state_imag[x][y]*state_imag[x][y];
-		}
-	}
-
-	norm = sqrt(total);
-
-	for(x = 0; x < resolution_x; x++){
-		for(y = 0; y < resolution_y; y++){
-			next_state_real[x][y] /= norm;
-			next_state_imag[x][y] /= norm;
-		}
-	}
-}
-
 void simulate(double dt){
 	int x, y;
 	double second_derivative_imag_x, second_derivative_imag_y;
@@ -357,13 +364,13 @@ void simulate(double dt){
 }
 
 void handle_input(double dt){
-	if(IsKeyDown(KEY_ENTER)){
+	if(IsKeyDown(KEY_UP)){
 		paddle1_pos -= paddle_speed*dt*target_fps;
 		if(paddle1_pos < 0.0){
 			paddle1_pos = 0.0;
 		}
 	}
-	if(IsKeyDown(KEY_RIGHT_SHIFT)){
+	if(IsKeyDown(KEY_DOWN)){
 		paddle1_pos += paddle_speed*dt*target_fps;
 		if(paddle1_pos + paddle_size > resolution_y){
 			paddle1_pos = resolution_y - paddle_size;
@@ -383,6 +390,28 @@ void handle_input(double dt){
 	}
 }
 
+void welcome_message(void){
+	int cont = 1, key;
+
+	const char *string0 = "Player 1 Controls: Ctrl, Shift";
+	const char *string1 = "Player 2 Controls: Up, Down";
+	const char *string2 = "Press enter to begin.";
+	Vector2 text0_size, text1_size;
+	text0_size = MeasureTextEx(GetFontDefault(), string0, font_size, font_size/10);
+	text1_size = MeasureTextEx(GetFontDefault(), string1, font_size, font_size/10);
+	while(cont){
+		BeginDrawing();
+		ClearBackground(BLACK);
+		DrawTextEx(GetFontDefault(), string0, (Vector2) {.x = 0.0, .y = 0.0}, font_size, font_size/10, (Color) {.r = 255, .g = 255, .b = 255, .a = 255});
+		DrawTextEx(GetFontDefault(), string1, (Vector2) {.x = 0.0, .y = text0_size.y + font_size/5.0}, font_size, font_size/10, (Color) {.r = 255, .g = 255, .b = 255, .a = 255});
+		DrawTextEx(GetFontDefault(), string2, (Vector2) {.x = 0.0, .y = text0_size.y + text1_size.y + 2.0*font_size/5}, font_size, font_size/10, (Color) {.r = 255, .g = 255, .b = 255, .a = 255});
+		EndDrawing();
+		if(IsKeyDown(KEY_ENTER)){
+			cont = 0;
+		}
+	}
+}
+
 int main(int argc, char **argv){
 	Image canvas;
 	Texture2D texture;
@@ -391,19 +420,21 @@ int main(int argc, char **argv){
 
 	pixels = malloc(sizeof(uint8_t)*resolution_x*resolution_y*4);
 	SetConfigFlags(FLAG_VSYNC_HINT);
-	InitWindow(screen_resolution_x, screen_resolution_y, "Quantum Pong");
+	InitWindow(1, 1, "Quantum Pong");
 
 	if(!IsWindowReady()){
 		fprintf(stderr, "Error: failed to open window.\n");
 		return 1;
 	}
 	SetWindowState(FLAG_WINDOW_RESIZABLE);
+	MaximizeWindow();
 
 	SetTargetFPS(target_fps);
 	canvas = GenImageColor(resolution_x, resolution_y, BLACK);
 	ImageFormat(&canvas, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
 	texture = LoadTextureFromImage(canvas);
 
+	welcome_message();
 	start_new_round();
 
 	while(!WindowShouldClose()){
@@ -417,6 +448,9 @@ int main(int argc, char **argv){
 		}
 		render(&texture);
 		frame_time = GetFrameTime();
+		if(frame_time > 2.0/target_fps){
+			frame_time = 2.0/target_fps;
+		}
 		current_time = GetTime();
 		if((p0_round_score > 0.4 || p1_round_score > 0.4) && critical_mass_time < 0.0){
 			critical_mass_time = current_time;
@@ -425,6 +459,11 @@ int main(int argc, char **argv){
 			start_new_round();
 		}
 	}
+
+	UnloadImage(canvas);
+	UnloadTexture(texture);
+	CloseWindow();
+	free(pixels);
 
 	return 0;
 }
