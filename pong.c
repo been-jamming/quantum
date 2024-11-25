@@ -345,10 +345,10 @@ void simulate(double dt){
 			next_state_imag[x][y] = state_imag[x][y] - second_derivative_real_x*dt - second_derivative_real_y*dt - potential*next_state_real[x][y]*dt;
 
 			if(x < barrier_end){
-				p0_round_score += next_state_real[x][y]*next_state_real[x][y] + next_state_imag[x][y]*next_state_imag[x][y];
+				p1_round_score += next_state_real[x][y]*next_state_real[x][y] + next_state_imag[x][y]*next_state_imag[x][y];
 			}
 			if(x >= resolution_x - barrier_end){
-				p1_round_score += next_state_real[x][y]*next_state_real[x][y] + next_state_imag[x][y]*next_state_imag[x][y];
+				p0_round_score += next_state_real[x][y]*next_state_real[x][y] + next_state_imag[x][y]*next_state_imag[x][y];
 			}
 		}
 	}
@@ -434,7 +434,7 @@ int main(int argc, char **argv){
 	ImageFormat(&canvas, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
 	texture = LoadTextureFromImage(canvas);
 
-	welcome_message();
+	//welcome_message();
 	start_new_round();
 
 	while(!WindowShouldClose()){
