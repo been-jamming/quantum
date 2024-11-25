@@ -18,7 +18,7 @@
 #define paddle_speed 1.0
 #define target_fps 60
 #define font_size 100
-#define max_speed 1.4
+#define max_speed 0.35
 #define max_round_time 60.0
 #define localization 25.0
 #define background_color ((Color) {.r = 128, .g = 128, .b = 128, .a = 255})
@@ -97,7 +97,7 @@ void start_new_round(void){
 	p1_round_score = 0.0;
 
 	r = GetRandomValue(500, 1000);
-	speed = r*max_speed/1000;
+	speed = r*max_speed/1000.0;
 
 	r = GetRandomValue(0, 628);
 	angle = r*2.0*M_PI/628;
@@ -391,7 +391,7 @@ void handle_input(double dt){
 }
 
 void welcome_message(void){
-	int cont = 1, key;
+	int cont = 1;
 
 	const char *string0 = "Player 1 Controls: Ctrl, Shift";
 	const char *string1 = "Player 2 Controls: Up, Down";
