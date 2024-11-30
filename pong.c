@@ -6,6 +6,9 @@
 #include <complex.h>
 #include <raylib.h>
 
+#define RAYGUI_IMPLEMENTATION
+#include <raygui.h>
+
 #ifndef M_PI
 	#define M_PI (3.1415926535898)
 #endif
@@ -50,6 +53,9 @@ double p1_round_score = 0.0;
 double round_start_time = 0.0;
 double critical_mass_time = -1.0;
 double current_time;
+
+int game_begin = 0;
+int do_exit = 0;
 
 void initialize_state(double x_dir, double y_dir, double localize_x, double localize_y){
 	complex entry, entry_x, entry_y;
@@ -117,17 +123,17 @@ void start_new_round(void){
 }
 
 int behind_paddles(int x, int y){
-	return x < barrier_end || x >= resolution_x - barrier_end;
+	return (x < barrier_end || x >= resolution_x - barrier_end) && game_begin;
 }
 
 int in_paddle(int x, int y){
-	return (x == barrier_end && y >= paddle0_pos && y < paddle0_pos + paddle_size) ||
-	       (x == resolution_x - barrier_end - 1 && y >= paddle1_pos && y < paddle1_pos + paddle_size);
+	return ((x == barrier_end && y >= paddle0_pos && y < paddle0_pos + paddle_size) ||
+	       (x == resolution_x - barrier_end - 1 && y >= paddle1_pos && y < paddle1_pos + paddle_size)) && game_begin;
 }
 
 int in_center(int x, int y){
-	return (resolution_x%2 == 1 && x == resolution_x/2 && y%10 < 5) ||
-	       (resolution_x%2 == 0 && (x == resolution_x/2 || x == resolution_x/2 + 1) && y%10 < 5);
+	return ((resolution_x%2 == 1 && x == resolution_x/2 && y%10 < 5) ||
+	       (resolution_x%2 == 0 && (x == resolution_x/2 || x == resolution_x/2 + 1) && y%10 < 5)) && game_begin;
 }
 
 Color get_color(complex value, double max_val){
@@ -189,6 +195,45 @@ void render_texture(Texture2D *texture, int x_pos, int y_pos, double scale){
 	DrawTextureEx(*texture, (struct Vector2) {x_pos, y_pos}, 0.0, scale, WHITE);
 }
 
+Rectangle scale_rectangle(Rectangle input, double scale){
+	return (Rectangle) {input.x*scale, input.y*scale, input.width*scale, input.height*scale};
+}
+
+void nothing(void){
+
+}
+
+void draw_main_menu(int x, int y, double scale){
+	Vector2 anchor01 = (Vector2) {x, y};
+	int i;
+
+	Rectangle layoutRecs[4] = {
+		scale_rectangle((Rectangle){0, 8, 312, 232 }, scale),
+		scale_rectangle((Rectangle){96, 168, 120, 24 }, scale),
+		scale_rectangle((Rectangle){96, 120, 120, 24 }, scale),
+		scale_rectangle((Rectangle){96, 72, 120, 24 }, scale),
+	};
+
+	for(i = 0; i < 4; i++){
+		layoutRecs[i].x += x;
+		layoutRecs[i].y += y;
+	}
+
+	GuiSetStyle(DEFAULT, TEXT_SIZE, scale*15);
+
+	GuiGroupBox(layoutRecs[0], "Main Menu");
+	if (GuiButton(layoutRecs[1], "Exit")) do_exit = 1; 
+	if (GuiButton(layoutRecs[2], "Settings")) nothing; 
+	if (GuiButton(layoutRecs[3], "Start Game")){
+		game_begin = 1.0;
+		p0_round_score = 0.0;
+		p1_round_score = 0.0;
+		p0_previous_score = 0.0;
+		p1_previous_score = 0.0;
+		start_new_round();
+	}
+}
+
 void render(Texture2D *texture){
 	Color color;
 	Vector2 text_size;
@@ -196,6 +241,7 @@ void render(Texture2D *texture){
 	int x, y, text_pos_x_p0, text_pos_y_p0, text_pos_x_p1, text_pos_y_p1;
 	char score_str_p0[8];
 	char score_str_p1[8];
+	double units_scale;
 
 	screen_resolution_x = GetScreenWidth();
 	screen_resolution_y = GetScreenHeight();
@@ -214,6 +260,7 @@ void render(Texture2D *texture){
 		image_height = ((double) screen_resolution_x)/target_aspect;
 		scale = ((double) screen_resolution_x)/resolution_x;
 	}
+	units_scale = 2.5*image_width/1920.0;
 
 	for(x = 0; x < resolution_x; x++){
 		for(y = 0; y < resolution_y; y++){
@@ -247,21 +294,24 @@ void render(Texture2D *texture){
 	ClearBackground(background_color);
 	render_texture(texture, image_start_x, image_start_y, scale);
 
-	snprintf(score_str_p0, 8, "%.2lf", p0_previous_score + p0_round_score);
-	score_str_p0[7] = '\0';
-	snprintf(score_str_p1, 8, "%.2lf", p1_previous_score + p1_round_score);
-	score_str_p1[7] = '\0';
+	if(game_begin){
+		snprintf(score_str_p0, 8, "%.2lf", p0_previous_score + p0_round_score);
+		score_str_p0[7] = '\0';
+		snprintf(score_str_p1, 8, "%.2lf", p1_previous_score + p1_round_score);
+		score_str_p1[7] = '\0';
+		text_size = MeasureTextEx(GetFontDefault(), score_str_p0, font_size, font_size/10);
+		text_pos_x_p0 = image_width*(((float) barrier_end)/((float) resolution_x)*0.5 + 0.25) - text_size.x/2.0 + image_start_x;
+		text_pos_y_p0 = image_height*0.25 - text_size.y/2.0 + image_start_y;
 
-	text_size = MeasureTextEx(GetFontDefault(), score_str_p0, font_size, font_size/10);
-	text_pos_x_p0 = image_width*(((float) barrier_end)/((float) resolution_x)*0.5 + 0.25) - text_size.x/2.0 + image_start_x;
-	text_pos_y_p0 = image_height*0.25 - text_size.y/2.0 + image_start_y;
+		text_size = MeasureTextEx(GetFontDefault(), score_str_p1, font_size, font_size/10);
+		text_pos_x_p1 = image_width*((1 - (barrier_end + 1.0)/((float) resolution_x))*0.5 + 0.25) - text_size.x/2.0 + image_start_x;
+		text_pos_y_p1 = image_height*0.25 - text_size.y/2.0 + image_start_y;
 
-	text_size = MeasureTextEx(GetFontDefault(), score_str_p1, font_size, font_size/10);
-	text_pos_x_p1 = image_width*((1 - (barrier_end + 1.0)/((float) resolution_x))*0.5 + 0.25) - text_size.x/2.0 + image_start_x;
-	text_pos_y_p1 = image_height*0.25 - text_size.y/2.0 + image_start_y;
-
-	DrawTextEx(GetFontDefault(), score_str_p0, (Vector2) {.x = text_pos_x_p0, .y = text_pos_y_p0}, font_size, font_size/10, (Color) {.r = 255, .g = 255, .b = 255, .a = 128});
-	DrawTextEx(GetFontDefault(), score_str_p1, (Vector2) {.x = text_pos_x_p1, .y = text_pos_y_p1}, font_size, font_size/10, (Color) {.r = 255, .g = 255, .b = 255, .a = 128});
+		DrawTextEx(GetFontDefault(), score_str_p0, (Vector2) {.x = text_pos_x_p0, .y = text_pos_y_p0}, font_size, font_size/10, (Color) {.r = 255, .g = 255, .b = 255, .a = 128});
+		DrawTextEx(GetFontDefault(), score_str_p1, (Vector2) {.x = text_pos_x_p1, .y = text_pos_y_p1}, font_size, font_size/10, (Color) {.r = 255, .g = 255, .b = 255, .a = 128});
+	} else {
+		draw_main_menu(image_start_x + image_width/2.0 - 312/2*units_scale, image_start_y + image_height/2.0 - 232/2*units_scale, units_scale);
+	}
 	EndDrawing();
 }
 
@@ -289,31 +339,57 @@ void get_second_derivative(double *out_x, double *out_y, double (*vector)[resolu
 	double p0_momentum, p1_momentum;
 	double x0, x1, x2, y0, y1, y2;
 
-	p0_momentum = get_barrier_momentum_p0(y, state_real, state_imag);
-	p1_momentum = get_barrier_momentum_p1(y, state_real, state_imag);
+	if(game_begin){
+		p0_momentum = get_barrier_momentum_p0(y, state_real, state_imag);
+		p1_momentum = get_barrier_momentum_p1(y, state_real, state_imag);
 
-	if((x == barrier_end && p0_momentum > 0) || (x == resolution_x - barrier_end && p1_momentum < 0) || x == 0 || in_paddle(x - 1, y) || in_paddle(x, y)){
-		x0 = 0.0;
-	} else {
-		x0 = vector[x - 1][y];
-	}
-	x1 = vector[x][y];
-	if((x == barrier_end - 1 && p0_momentum > 0) || (x == resolution_x - barrier_end - 1 && p1_momentum < 0) || x == resolution_x - 1 || in_paddle(x + 1, y) || in_paddle(x, y)){
-		x2 = 0.0;
-	} else {
-		x2 = vector[x + 1][y];
-	}
+		if((x == barrier_end && p0_momentum > 0) || (x == resolution_x - barrier_end && p1_momentum < 0) || x == 0 || in_paddle(x - 1, y) || in_paddle(x, y)){
+			x0 = 0.0;
+		} else {
+			x0 = vector[x - 1][y];
+		}
+		x1 = vector[x][y];
+		if((x == barrier_end - 1 && p0_momentum > 0) || (x == resolution_x - barrier_end - 1 && p1_momentum < 0) || x == resolution_x - 1 || in_paddle(x + 1, y) || in_paddle(x, y)){
+			x2 = 0.0;
+		} else {
+			x2 = vector[x + 1][y];
+		}
 
-	if(y == 0 || in_paddle(x, y - 1) || in_paddle(x, y)){
-		y0 = 0.0;
+		if(y == 0 || in_paddle(x, y - 1) || in_paddle(x, y)){
+			y0 = 0.0;
+		} else {
+			y0 = vector[x][y - 1];
+		}
+		y1 = vector[x][y];
+		if(y == resolution_y - 1 || in_paddle(x, y + 1) || in_paddle(x, y)){
+			y2 = 0.0;
+		} else {
+			y2 = vector[x][y + 1];
+		}
 	} else {
-		y0 = vector[x][y - 1];
-	}
-	y1 = vector[x][y];
-	if(y == resolution_y - 1 || in_paddle(x, y + 1) || in_paddle(x, y)){
-		y2 = 0.0;
-	} else {
-		y2 = vector[x][y + 1];
+		if(x == 0){
+			x0 = 0.0;
+		} else {
+			x0 = vector[x - 1][y];
+		}
+		x1 = vector[x][y];
+		if(x == resolution_x - 1){
+			x2 = 0.0;
+		} else {
+			x2 = vector[x + 1][y];
+		}
+
+		if(y == 0){
+			y0 = 0.0;
+		} else {
+			y0 = vector[x][y - 1];
+		}
+		y1 = vector[x][y];
+		if(y == resolution_y - 1){
+			y2 = 0.0;
+		} else {
+			y2 = vector[x][y + 1];
+		}
 	}
 
 	*out_x = x0 - 2.0*x1 + x2;
@@ -420,7 +496,7 @@ int main(int argc, char **argv){
 
 	pixels = malloc(sizeof(uint8_t)*resolution_x*resolution_y*4);
 	SetConfigFlags(FLAG_VSYNC_HINT);
-	InitWindow(1, 1, "Quantum Pong");
+	InitWindow(1920, 1080, "Quantum Pong");
 
 	if(!IsWindowReady()){
 		fprintf(stderr, "Error: failed to open window.\n");
@@ -437,8 +513,7 @@ int main(int argc, char **argv){
 	//welcome_message();
 	start_new_round();
 
-	while(!WindowShouldClose()){
-		handle_input(frame_time);
+	while(!do_exit && !WindowShouldClose()){
 		if(current_time - round_start_time > 3.0){
 			for(k = 0; k < ticks_per_frame; k++){
 				simulate(frame_time*time_step);
@@ -447,12 +522,15 @@ int main(int argc, char **argv){
 			}
 		}
 		render(&texture);
+		if(game_begin){
+			handle_input(frame_time);
+		}
 		frame_time = GetFrameTime();
 		if(frame_time > 2.0/target_fps){
 			frame_time = 2.0/target_fps;
 		}
 		current_time = GetTime();
-		if((p0_round_score > 0.4 || p1_round_score > 0.4) && critical_mass_time < 0.0){
+		if((p0_round_score > 0.4 || p1_round_score > 0.4) && critical_mass_time < 0.0 && game_begin){
 			critical_mass_time = current_time;
 		}
 		if(current_time - round_start_time > max_round_time || (critical_mass_time > 0.0 && current_time - critical_mass_time > 5.0)){
