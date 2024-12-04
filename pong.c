@@ -6,6 +6,13 @@
 #include <complex.h>
 #include <raylib.h>
 
+//The following hack allows me to control the height of window title bars
+//It's a bit silly that this isn't a style property
+
+#define RAYGUI_WINDOWBOX_STATUSBAR_HEIGHT raygui_windowbox_statusbar_height
+int RAYGUI_WINDOWBOX_STATUSBAR_HEIGHT = 24;
+
+#define RAYGUI_NO_ICONS
 #define RAYGUI_IMPLEMENTATION
 #include <raygui.h>
 
@@ -56,6 +63,92 @@ double current_time;
 
 int game_begin = 0;
 int do_exit = 0;
+int main_menu = 1;
+int settings_menu = 0;
+
+int player0_key_up = KEY_LEFT_SHIFT;
+int player0_key_down = KEY_LEFT_CONTROL;
+int player1_key_up = KEY_UP;
+int player1_key_down = KEY_DOWN;
+
+char *const get_key_name(int key){
+	switch(key){
+		case KEY_SPACE:
+			return "SPACE";
+		case KEY_ENTER:
+			return "ENTER";
+		case KEY_TAB:
+			return "TAB";
+		case KEY_BACKSPACE:
+			return "BACKSPACE";
+		case KEY_DELETE:
+			return "DELETE";
+		case KEY_RIGHT:
+			return "RIGHT";
+		case KEY_LEFT:
+			return "LEFT";
+		case KEY_DOWN:
+			return "DOWN";
+		case KEY_UP:
+			return "UP";
+		case KEY_PAGE_DOWN:
+			return "PAGE DOWN";
+		case KEY_PAGE_UP:
+			return "PAGE UP";
+		case KEY_HOME:
+			return "HOME";
+		case KEY_END:
+			return "END";
+		case KEY_CAPS_LOCK:
+			return "CAPS LOCK";
+		case KEY_SCROLL_LOCK:
+			return "SCROLL LOCK";
+		case KEY_PRINT_SCREEN:
+			return "PRINT SCREEN";
+		case KEY_PAUSE:
+			return "PAUSE";
+		case KEY_F1:
+			return "F1";
+		case KEY_F2:
+			return "F2";
+		case KEY_F3:
+			return "F3";
+		case KEY_F4:
+			return "F4";
+		case KEY_F5:
+			return "F5";
+		case KEY_F6:
+			return "F6";
+		case KEY_F7:
+			return "F7";
+		case KEY_F8:
+			return "F8";
+		case KEY_F9:
+			return "F9";
+		case KEY_F10:
+			return "F10";
+		case KEY_F11:
+			return "F11";
+		case KEY_F12:
+			return "F12";
+		case KEY_LEFT_SHIFT:
+		case KEY_RIGHT_SHIFT:
+			return "SHIFT";
+		case KEY_LEFT_CONTROL:
+		case KEY_RIGHT_CONTROL:
+			return "CONTROL";
+		case KEY_LEFT_ALT:
+		case KEY_RIGHT_ALT:
+			return "ALT";
+		case KEY_LEFT_SUPER:
+		case KEY_RIGHT_SUPER:
+			return "SUPER";
+		case KEY_KB_MENU:
+			return "MENU";
+		default:
+			return NULL;
+	}
+}
 
 void initialize_state(double x_dir, double y_dir, double localize_x, double localize_y){
 	complex entry, entry_x, entry_y;
@@ -199,12 +292,7 @@ Rectangle scale_rectangle(Rectangle input, double scale){
 	return (Rectangle) {input.x*scale, input.y*scale, input.width*scale, input.height*scale};
 }
 
-void nothing(void){
-
-}
-
 void draw_main_menu(int x, int y, double scale){
-	Vector2 anchor01 = (Vector2) {x, y};
 	int i;
 
 	Rectangle layoutRecs[4] = {
@@ -223,15 +311,147 @@ void draw_main_menu(int x, int y, double scale){
 
 	GuiGroupBox(layoutRecs[0], "Main Menu");
 	if (GuiButton(layoutRecs[1], "Exit")) do_exit = 1; 
-	if (GuiButton(layoutRecs[2], "Settings")) nothing; 
+	if (GuiButton(layoutRecs[2], "Settings")){
+		main_menu = 0;
+		settings_menu = 1;
+	}
 	if (GuiButton(layoutRecs[3], "Start Game")){
-		game_begin = 1.0;
+		game_begin = 1;
+		main_menu = 0;
 		p0_round_score = 0.0;
 		p1_round_score = 0.0;
 		p0_previous_score = 0.0;
 		p1_previous_score = 0.0;
 		start_new_round();
 	}
+}
+
+int draw_settings_menu(int x, int y, double scale){
+	static const char *WindowBox000Text = "Settings";
+	static const char *GroupBox001Text = "Controls";
+	static const char *Button002Text = "Left: Up";
+	static const char *Button005Text = "Left: Down";
+	static const char *Button006Text = "Right: Up";
+	static char *StatusBar007Text = "UP";
+	static char *StatusBar006Text = "SHIFT";
+	static char *StatusBar008Text = "CONTROL";
+	static const char *Button008Text = "Right: Down";
+	static char *StatusBar009Text = "DOWN";
+
+	static char buffer0[16] = {'\0'};
+	static char buffer1[16] = {'\0'};
+	static char buffer2[16] = {'\0'};
+	static char buffer3[16] = {'\0'};
+
+	int WindowBox000Active = 1;
+
+	int i;
+
+	static int player0_input_up = 0;
+	static int player0_input_down = 0;
+	static int player1_input_up = 0;
+	static int player1_input_down = 0;
+
+	int key;
+	char *key_text;
+
+	RAYGUI_WINDOWBOX_STATUSBAR_HEIGHT = 24*scale;
+
+	Vector2 anchor01 = { 0, 0 };
+
+	Rectangle layoutRecs[10] = {
+		scale_rectangle((Rectangle){0, 0, 296, 256 }, scale),
+		scale_rectangle((Rectangle){8, 40, 264, 200 }, scale),
+		scale_rectangle((Rectangle){24, 56, 120, 24 }, scale),
+		scale_rectangle((Rectangle){24, 104, 120, 24 }, scale),
+		scale_rectangle((Rectangle){24, 152, 120, 24 }, scale),
+		scale_rectangle((Rectangle){152, 152, 104, 24 }, scale),
+		scale_rectangle((Rectangle){152, 56, 104, 24 }, scale),
+		scale_rectangle((Rectangle){152, 104, 104, 24 }, scale),
+		scale_rectangle((Rectangle){24, 200, 120, 24 }, scale),
+		scale_rectangle((Rectangle){152, 200, 104, 24 }, scale),
+	};
+
+	for(i = 0; i < 10; i++){
+		layoutRecs[i].x += x;
+		layoutRecs[i].y += y;
+	}
+
+	WindowBox000Active = !GuiWindowBox(layoutRecs[0], WindowBox000Text);
+	GuiGroupBox(layoutRecs[1], GroupBox001Text);
+	if(GuiButton(layoutRecs[2], Button002Text)){
+		player0_input_up = 1;
+		StatusBar006Text = "Press Key";
+	}
+	if(GuiButton(layoutRecs[3], Button005Text)){
+		player0_input_down = 1;
+		StatusBar008Text = "Press Key";
+	}
+	if(GuiButton(layoutRecs[4], Button006Text)){
+		player1_input_up = 1;
+		StatusBar007Text = "Press Key";
+	}
+	GuiStatusBar(layoutRecs[5], StatusBar007Text);
+	GuiStatusBar(layoutRecs[6], StatusBar006Text);
+	GuiStatusBar(layoutRecs[7], StatusBar008Text);
+	if(GuiButton(layoutRecs[8], Button008Text)){
+		player1_input_down = 1;
+		StatusBar009Text = "Press Key";
+	}
+	GuiStatusBar(layoutRecs[9], StatusBar009Text);
+
+	if(player0_input_up || player0_input_down || player1_input_up || player1_input_down){
+		key = GetKeyPressed();
+		if(key){
+			key_text = get_key_name(key);
+		}
+	}
+	if(key && player0_input_up){
+		if(key_text){
+			StatusBar006Text = key_text;
+		} else {
+			buffer0[0] = key;
+			buffer0[1] = '\0';
+			StatusBar006Text = buffer0;
+		}
+		player0_key_up = key;
+	} else if(key && player0_input_down){
+		if(key_text){
+			StatusBar008Text = key_text;
+		} else {
+			buffer1[0] = key;
+			buffer1[1] = '\0';
+			StatusBar008Text = buffer1;
+		}
+		player0_key_down = key;
+	} else if(key && player1_input_up){
+		if(key_text){
+			StatusBar007Text = key_text;
+		} else {
+			buffer2[0] = key;
+			buffer2[1] = '\0';
+			StatusBar007Text = buffer2;
+		}
+		player1_key_up = key;
+	} else if(key && player1_input_down){
+		if(key_text){
+			StatusBar009Text = key_text;
+		} else {
+			buffer3[0] = key;
+			buffer3[1] = '\0';
+			StatusBar009Text = buffer3;
+		}
+		player1_key_down = key;
+	}
+
+	if(key){
+		player0_input_up = 0;
+		player0_input_down = 0;
+		player1_input_up = 0;
+		player1_input_down = 0;
+	}
+
+	return !WindowBox000Active;
 }
 
 void render(Texture2D *texture){
@@ -309,8 +529,13 @@ void render(Texture2D *texture){
 
 		DrawTextEx(GetFontDefault(), score_str_p0, (Vector2) {.x = text_pos_x_p0, .y = text_pos_y_p0}, font_size, font_size/10, (Color) {.r = 255, .g = 255, .b = 255, .a = 128});
 		DrawTextEx(GetFontDefault(), score_str_p1, (Vector2) {.x = text_pos_x_p1, .y = text_pos_y_p1}, font_size, font_size/10, (Color) {.r = 255, .g = 255, .b = 255, .a = 128});
-	} else {
+	} else if(main_menu){
 		draw_main_menu(image_start_x + image_width/2.0 - 312/2*units_scale, image_start_y + image_height/2.0 - 232/2*units_scale, units_scale);
+	} else if(settings_menu){
+		if(draw_settings_menu(image_start_x + image_width/2.0 - 296/2*units_scale, image_start_y + image_height/2.0 - 256/2*units_scale, units_scale)){
+			settings_menu = 0;
+			main_menu = 1;
+		}
 	}
 	EndDrawing();
 }
@@ -440,25 +665,25 @@ void simulate(double dt){
 }
 
 void handle_input(double dt){
-	if(IsKeyDown(KEY_UP)){
+	if(IsKeyDown(player1_key_up)){
 		paddle1_pos -= paddle_speed*dt*target_fps;
 		if(paddle1_pos < 0.0){
 			paddle1_pos = 0.0;
 		}
 	}
-	if(IsKeyDown(KEY_DOWN)){
+	if(IsKeyDown(player1_key_down)){
 		paddle1_pos += paddle_speed*dt*target_fps;
 		if(paddle1_pos + paddle_size > resolution_y){
 			paddle1_pos = resolution_y - paddle_size;
 		}
 	}
-	if(IsKeyDown(KEY_LEFT_SHIFT)){
+	if(IsKeyDown(player0_key_up)){
 		paddle0_pos -= paddle_speed*dt*target_fps;
 		if(paddle0_pos < 0.0){
 			paddle0_pos = 0.0;
 		}
 	}
-	if(IsKeyDown(KEY_LEFT_CONTROL)){
+	if(IsKeyDown(player0_key_down)){
 		paddle0_pos += paddle_speed*dt*target_fps;
 		if(paddle0_pos + paddle_size > resolution_y){
 			paddle0_pos = resolution_y - paddle_size;
